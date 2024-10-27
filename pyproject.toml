@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "goit-python-web-hw-11"
+version = "0.1.0"
+description = ""
+authors = ["volodymyr-v-konoval <volodymyr.v.konoval@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.115.3"
+uvicorn = "^0.32.0"
+sqlalchemy = "^2.0.36"
+pydentic = {extras = ["email"], version = "^0.0.1.dev3"}
+pydantic = {extras = ["email"], version = "^2.9.2"}
+psycopg2-binary = "^2.9.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
