@@ -7,7 +7,7 @@ class ContactBase(BaseModel):
     last_name: str
     email: EmailStr
     phone_number: str
-    birthdat: date
+    birthday: date
     additional_data: str = None
 
 
@@ -20,3 +20,25 @@ class Contact(ContactBase):
 
     class Config:
         orm_mode = True
+
+
+class UserBase(BaseModel):
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserResponse(UserBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    
