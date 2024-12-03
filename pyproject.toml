@@ -16,6 +16,9 @@ psycopg2-binary = "^2.9.10"
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-jose = "^3.3.0"
 alembic = "^1.14.0"
+slowapi = "^0.1.9"
+cloudinary = "^1.41.0"
+python-decouple = "^3.8"
 
 
 [build-system]
