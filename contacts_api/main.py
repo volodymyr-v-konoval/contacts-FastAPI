@@ -16,8 +16,8 @@ from datetime import datetime, timedelta
 from auth import hash_password, verify_password, create_access_token, create_refresh_token, get_current_user, send_verification_email, verify_token
 from database import engine, get_db
 from models import Base, Contact, User
-from schemas import ContactCreate, Contact, UserCreate, UserResponse, Token
-
+from schemas import ContactCreate, UserCreate, UserResponse, Token
+from schemas import Contact as ContactResponse
 Base.metadata.create_all(bind=engine)
 
 limiter = Limiter(key_func=partial(lambda request: get_current_user().id), default_limits=["5/minute"])
@@ -44,6 +44,16 @@ app.add_middleware(
 # Checking exception for limiter
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """
+    Handles requests exceeding the rate limit.
+    
+    Args:
+        request (Request): The HTTP request object.
+        exc (RateLimitExceeded): The exception raised when the rate limit is exceeded.
+        
+    Returns:
+        JSONResponse: A response with a 429 status code and an error message.
+    """
     return JSONResponse(
         status_code=429,
         content={"detail": "Rate limit exceeded, please try again later."},
@@ -56,6 +66,20 @@ def upload_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    Uploads a user's avatar to Cloudinary and updates the user's avatar URL in the database.
+    
+    Args:
+        file (UploadFile): The uploaded file object.
+        db (Session): The database session.
+        current_user (User): The currently authenticated user.
+
+    Returns:
+        dict: A dictionary containing the new avatar URL.
+
+    Raises:
+        HTTPException: If an error occurs during the upload process.
+    """
     try:
         result = cloudinary.uploader.upload(
             file.file,
@@ -75,17 +99,41 @@ def upload_avatar(
     return {"avatar_url": current_user.avatar_url}
 
 # Get all contacts
-@app.get("/contacts/", response_model=List[Contact])
+@app.get("/contacts/", response_model=List[ContactResponse])
 def read_contacts(skip: int = 0, 
                   limit: int = 100, 
                   db: Session = Depends(get_db)):
+    """
+    Retrieves a list of contacts with optional pagination.
+    
+    Args:
+        skip (int): The number of records to skip. Defaults to 0.
+        limit (int): The maximum number of records to retrieve. Defaults to 100.
+        db (Session): The datavase session.
+        
+    Returns:
+        List[Contact]: A list of contact objects.
+    """
     contacts = db.query(Contact).offset(skip).limit(limit).all()
     return contacts
 
 
 # Get a single contact by ID
-@app.get("/contacts/{contact_id}", response_model=Contact)
+@app.get("/contacts/{contact_id}", response_model=ContactResponse)
 def read_contact(contact_id: int, db: Session = Depends(get_db)):
+    """
+    Retrieves a contact by its ID.
+    
+    Args:
+        contact_id (int): The ID of the contact.
+        db (Session): The database session.
+        
+    Returns:
+        Contact: The requested contact object.
+        
+    Raises:
+        HTTPException: If the contact is not found.
+    """
     db_contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if db_contact is None:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -93,10 +141,24 @@ def read_contact(contact_id: int, db: Session = Depends(get_db)):
 
 
 # Update a contact
-@app.put("/contacts/{contact_id}", response_model=Contact)
+@app.put("/contacts/{contact_id}", response_model=ContactResponse)
 def update_contact(contact_id: int, 
                    contact: ContactCreate, 
                    db: Session = Depends(get_db)):
+    """
+    Updates a contact's information.
+    
+    Args:
+        contact_id (int): The ID of the contact to update.
+        contact (ContactCreate): The updated contact data.
+        db (Session): The datavase session.
+        
+    Returns:
+        Contact: The updated contact object.
+        
+    Raises:
+        HTTPException: If the contact is not found.
+    """
     db_contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if db_contact is None:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -109,8 +171,21 @@ def update_contact(contact_id: int,
     
 
 # Delete a contact
-@app.delete("/contacts/{contact_id}", response_model=Contact)
+@app.delete("/contacts/{contact_id}", response_model=ContactResponse)
 def delete_contact(contact_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes a contact by its ID.
+    
+    Args:
+        contact_id (int): The ID of the contact to delete.
+        db (Session): The database session.
+        
+    Returns:
+        Contact: The deleted contact object.
+        
+    Raises:
+        HTTPException: If the contact is not found.
+    """
     db_contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if db_contact is None:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -120,9 +195,19 @@ def delete_contact(contact_id: int, db: Session = Depends(get_db)):
 
 
 # Search contacts by first name, last name, or email
-@app.get("/contacts/search/", response_model=List[Contact])
+@app.get("/contacts/search/", response_model=List[ContactResponse])
 def search_contacts(query: Optional[str] = Query(None), 
                     db: Session = Depends(get_db)):
+    """
+    Searches contacts by first name, last name, or email.
+    
+    Args:
+        query (Optional[str]): The search query. Defeults to None.
+        db (Session): The database session.
+        
+    Returns:
+        List[Contact]: A list of matching contacts.
+    """
     if query:
         contacts = db.query(Contact).filter(
             (Contact.first_name.ilike(f"%{query}%")) |
@@ -134,8 +219,17 @@ def search_contacts(query: Optional[str] = Query(None),
 
 
 # Get contacts with birthdays in the next 7 days
-@app.get("/contacts/birthdays/", response_model=List[Contact])
+@app.get("/contacts/birthdays/", response_model=List[ContactResponse])
 def upcoming_birthdays(db: Session = Depends(get_db)):
+    """
+    Retrieves contacts with birthdays in the next 7 days.
+    
+    Args:
+        db (Session): The database session.
+        
+    Returns:
+        List[Contact]: A list of contacts with upcoming bithdays.
+    """
     today = datetime.today().date()
     next_week = today + timedelta(days=7)
     contacts = db.query(Contact).filter(
@@ -147,6 +241,19 @@ def upcoming_birthdays(db: Session = Depends(get_db)):
 @app.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), 
           db: Session = Depends(get_db)):
+    """
+    Authenticates a user and generates access and refresh tokens.
+    
+    Args:
+        form_data (OAuth2PaswordRequestForm): The login form data.
+        db (Session): The database session.
+        
+    Returns:
+        Token: The generated access and refresh tokens.
+        
+    Raises:
+        HTTPException: If the credentials are invalid.
+    """
     user = db.query(User).filter(
         User.email == form_data.username
         ).first()
@@ -160,11 +267,25 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(),
             "token_type": "bearer"}
 
 
-@app.post("/contacts/", response_model=Contact)
-@limiter.limit("3/minute")
-def create_contact(contact: ContactCreate,
+@app.post("/contacts/", response_model=ContactResponse)
+@limiter.limit("5/minute")
+def create_contact(request: Request, contact: ContactCreate,
                    db: Session = Depends(get_db),
                    current_user: User = Depends(get_current_user)):
+    """
+    Creates a new contact for the authenticated user.
+    
+    Args:
+        contact (ContactCreate): The contact data to create.
+        db (Session): The database session.
+        current_user (User): The currently authenticated user.
+        
+    Returns:
+        Contact: The created contact object.
+        
+    Raises:
+        HTTPException: If a ontact with the same email already exists.
+    """
     existing_contact = db.query(Contact).filter(
         Contact.email == contact.email,
         Contact.user_id == current_user.id
@@ -185,9 +306,22 @@ def create_contact(contact: ContactCreate,
 
 @app.post("/register", response_model=UserResponse, status_code=201)
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    Registers a new user and sends a verification email.
+    
+    Args:
+        user (UserCreate): The user data for registration.
+        db (Session): The database session.
+        
+    Returns:
+        UserResponse: The registered user object.
+        
+    Raises:
+        HTTPException: If the email is already registered.
+    """
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
-        raise HTTPException(status_code=409, detail="Email lready registered")
+        raise HTTPException(status_code=409, detail="Email already registered")
     
     hashed_password = hash_password(user.password)
     new_user = User(email=user.email, hashed_password=hashed_password)
@@ -203,6 +337,19 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.get("/verify-email")
 def verify_email(token: str, db: Session = Depends(get_db)):
+    """
+    Verifies a user's email using a token.
+    
+    Args:
+        token (str): The email verification token.
+        db (Session): The database session.
+        
+    Returns:
+        dict: A success message if the email is verified.
+        
+    Raises:
+        HTTPExcepion: If the token is invalid, the user is not found, or the email is alreay verified.
+    """
     try:
         payload = verify_token(token)
         email = payload.get("sub")

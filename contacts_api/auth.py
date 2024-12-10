@@ -1,3 +1,10 @@
+"""
+Module for handling authetication, email varification, and token processing.
+
+This module includes functions for token generation, password management,
+user verification, and Cloudinary integration.
+"""
+
 import smtplib
 import cloudinary 
 import cloudinary.uploader
@@ -15,6 +22,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
+# Password context confifuration
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
@@ -35,26 +43,75 @@ cloudinary.config(
 
 
 def hash_password(password: str) -> str:
+    """
+    Hashes a password for storing in the database.
+    
+    Args:
+        password (str): The plaintext password.
+        
+    Returns:
+        str: The hashed password.
+    """
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verifies if a plaintext password matches its hashed version.
+    
+    Args:
+        plain_password (str): The plaintext password.
+        hashed_password (str): The hashed password.
+        
+    Returns:
+        bool: True if the passwords match, False otherwise.
+    """
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: dict) -> str:
+    """
+    Generates an access token for authentication.
+    
+    Args:
+        data (dict): The data to encode in the token.
+        
+    Returns:
+        str: The generated access token.
+    """
     to_encode = data.copy()
     to_encode.update({"exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict) -> str:
+    """
+    Generates a refresh token for renewing the access token.
+    
+    Args:
+        data (dict): The data to encode in the token.
+        
+    Returns:
+        str: The generated refresh token.
+    """
     to_encode = data.copy()
     to_encode.update({"exp": datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verify_token(token: str) -> dict:
+    """
+    Verifies the validity of a JWT token.
+    
+    Args:
+        token (str): The JWT token.
+        
+    Returns:
+        dict: The data encoded in the token.
+        
+    Raises:
+        HTTPException: If the token is invalid.
+    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
@@ -64,6 +121,19 @@ def verify_token(token: str) -> dict:
 
 def get_current_user(token: str = Depends(oauth2_scheme),
                      db: Session = Depends(get_db)):
+    """
+    Retrieves the currently authenticated user.
+    
+    Args:
+        token (str): The JWT token provided by the client.
+        db (Session): The database session.
+        
+    Returns:
+        User: The user object.
+        
+    Raises:
+        HTTPException: If the token is invalid or the user is not found.
+    """
     payload = verify_token(token)
     email = payload.get("sub")
     if not email:
@@ -77,6 +147,16 @@ def get_current_user(token: str = Depends(oauth2_scheme),
 
 
 def send_verification_email(email: str, token: str):
+    """
+    Sends an email verificaion message.
+    
+    Args:
+        email (str): The recipient's email address.
+        token (str): The verification token.
+        
+    Raises:
+        smtplib.SMTPException: If there is an issue sending the email.
+    """
     sender_email = config("SMTP_EMAIL")
     sender_password = config("SMTP_PASSWORD")
     subject = "Verify your email"
